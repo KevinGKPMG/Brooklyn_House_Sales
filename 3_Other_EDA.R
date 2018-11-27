@@ -25,6 +25,9 @@ train<- subset(train, train$sale_price>10000)
 #Sqft
 train<-subset(train, train$gross_sqft>0)
 
+#Year Built
+train<-subset(train, train$year_built>1875)
+
 ###############################################################################################################
 ###Further shrink training data
 ###############################################################################################################
@@ -120,7 +123,7 @@ head(x)
 
 myDate<-NULL
 for (i in seq(1:dim(x)[1])){
-  myDate<-c(myDate, paste(x$year[i], x$month[i],sep=''))
+  myDate<-c(myDate, paste(x$year[i], x$month[i], "01",sep='-'))
 }
 myDate
 x$myDate<-myDate
@@ -134,5 +137,154 @@ paste(x$year[1], x$month[1], sep='')
 ggplot(x, aes(x=myDate, y=average_price)) + geom_point(color='steelblue')
 
 #########################Reading in FRED
-HPI<-read.csv('CSUSHPINSA.csv')
+HPI<-read.csv('CSUSHPINSA.csv')[13:192,]
 head(HPI)
+ggplot(HPI, aes(x=DATE, y=CSUSHPINSA)) + geom_point(color='orange')
+
+Merged_Price_HPI <- sqldf('
+                          select 
+                            HPI.DATE as Date,
+                            HPI.CSUSHPINSA as HPI,
+                            x.average_price as Avg_Price
+                          from HPI inner join x on HPI.DATE=x.myDate')
+
+head(Merged_Price_HPI)
+
+ggplot(Merged_Price_HPI, aes(Date, y = value, color = variable)) + 
+  geom_point(aes(y = HPI, col = "HPI")) + 
+  geom_point(aes(y = Avg_Price, col = "Avg_Price"))
+
+normalize_HPI <- function(x) {
+  return ((x - 161.4047) / 18.12703)
+}
+
+normalize_Price <- function(x) {
+  return ((x - 657459.4) / 161466.6)
+}
+
+Merged_Price_HPI$HPI_n<-unlist(lapply(Merged_Price_HPI$HPI, normalize_HPI))
+Merged_Price_HPI$Avg_Price_n<-unlist(lapply(Merged_Price_HPI$Avg_Price, normalize_Price))
+
+mean(Merged_Price_HPI$HPI_n)
+sd(Merged_Price_HPI$HPI_n)
+
+
+mean(Merged_Price_HPI$Avg_Price_n)
+sd(Merged_Price_HPI$Avg_Price_n)
+
+Merged_Price_HPI$Date <- as.Date(Merged_Price_HPI$Date, format="%Y-%m-%d")
+
+ggplot(Merged_Price_HPI, aes(Date, y = Standardized_Value, color = variable)) + 
+  geom_point(aes(y = HPI_n, col = "HPI")) + 
+  geom_point(aes(y = Avg_Price_n, col = "Avg_Price")) +
+  ggtitle('Average Price vs. HPI') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+###############################################################################################################
+###Year Built
+###############################################################################################################
+head(train_eda$year_built)
+summary(train_eda$year_built)
+hist(train_eda$year_built)
+
+price_by_yr <- sqldf('
+                     select
+                      year_built,
+                      avg(sale_price) as avg_price,
+                      count(*) as count
+                     from train_eda
+                     group by year_built')
+ggplot(price_by_yr, aes(x=year_built, y=avg_price)) + 
+  geom_point(color='steel blue') +
+  ggtitle('Average Price vs. Year Built') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+price_by_yr_large <- subset(price_by_yr, price_by_yr$count>100)
+ggplot(price_by_yr_large, aes(x=year_built, y=avg_price)) + 
+  geom_point(color='steel blue') +
+  ggtitle('Average Price vs. Year Built') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+price_by_yr_small <- subset(price_by_yr, price_by_yr$count<100)
+ggplot(price_by_yr_small, aes(x=year_built, y=avg_price)) + 
+  geom_point(color='steel blue') +
+  ggtitle('Average Price vs. Year Built') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+###############################################################################################################
+###Altered
+###############################################################################################################
+head(train_eda$YearAlter1)
+
+is_altered <- function(x){
+  if(x>0){
+    return(1) 
+  }
+  else{
+    return(0)
+  }
+}
+
+train_eda$Alter1_Ind<-unlist(lapply(train_eda$YearAlter1, is_altered))
+sum(train_eda$Alter1_Ind)
+
+train_eda$Alter2_Ind<-unlist(lapply(train_eda$YearAlter2, is_altered))
+sum(train_eda$Alter2_Ind)
+
+
+train_eda %>% select(Alter1_Ind, sale_price) %>% ggplot(aes(factor(Alter1_Ind), sale_price)) + 
+  geom_boxplot() + 
+  theme(axis.text.x = element_text(angle = 90, hjust =1)) + 
+  xlab('Alter 1')
+
+train_eda %>% select(Alter2_Ind, sale_price) %>% ggplot(aes(factor(Alter2_Ind), sale_price)) + 
+  geom_boxplot() + 
+  theme(axis.text.x = element_text(angle = 90, hjust =1)) + 
+  xlab('Alter 2')
+
+Alter1_Pr <- sqldf('
+                   select
+                    avg(sale_price) as Avg_Price,
+                    Alter1_Ind
+                   from train_eda
+                   group by Alter1_Ind
+                   ')
+Alter1_Pr
+
+#Any Alter2s but not Alter1s?
+disc <- NULL
+for(i in 1:dim(train_eda)[1]){
+  if(train_eda$Alter2_Ind[i]==1 & train_eda$Alter1_Ind[i]==0){
+    disc<-c(disc,1)
+  }
+  else{
+    disc<-c(disc,0)
+  }
+}
+sum(disc)
+
+###############################################################################################################
+###Gross_Sqft
+###############################################################################################################
+
+
+  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+

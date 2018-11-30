@@ -29,34 +29,14 @@ train<-subset(train, train$gross_sqft>0)
 train<-subset(train, train$year_built>1875)
 
 ###############################################################################################################
-###Further shrink training data
+###Only keep interesting columns
 ###############################################################################################################
 
-train <- select(train, gross_sqft, year_built, sale_price, sale_date, year_of_sale, YearAlter1, YearAlter2,
+train <- select(train, address, gross_sqft, year_built, sale_price, sale_date, year_of_sale, YearAlter1, YearAlter2,
                 Landmark, GarageArea, LotArea,	BldgArea,	ComArea,	ResArea,	OfficeArea,	RetailArea,
                 StrgeArea,	FactryArea,	OtherArea,	NumBldgs,	NumFloors,	UnitsRes,	UnitsTotal, HistDist,
                 XCoord, YCoord, land_sqft)
 
-
-
-
-
-
-###############################################################################################################
-###Missing
-###############################################################################################################
-
-plot_Missing <- function(data_in, title = NULL){
-  temp_df <- as.data.frame(ifelse(is.na(data_in), 0, 1))
-  temp_df <- temp_df[,order(colSums(temp_df))]
-  data_temp <- expand.grid(list(x = 1:nrow(temp_df), y = colnames(temp_df)))
-  data_temp$m <- as.vector(as.matrix(temp_df))
-  data_temp <- data.frame(x = unlist(data_temp$x), y = unlist(data_temp$y), m = unlist(data_temp$m))
-  ggplot(data_temp) + geom_tile(aes(x=x, y=y, fill=factor(m))) + scale_fill_manual(values=c("white", "black"), name="Missing\n(0=Yes, 1=No)") + theme_light() + ylab("") + xlab("") + ggtitle(title)
-}
-
-
-plot_Missing(train[,colSums(is.na(train)) > 0])
 
 ###############################################################################################################
 ###Size variables
@@ -77,8 +57,8 @@ train_eda<-train
 ###############################################################################################################
 ###GarageArea
 ###############################################################################################################
-hist(train$GarageArea)
-sample<-subset(train, train$GarageArea>0)
+hist(train_eda$GarageArea)
+sample<-subset(train_eda, train$GarageArea>0)
 hist(sample$GarageArea)
 dim(sample)
 
@@ -92,8 +72,6 @@ dummy_garage <-function(GarageArea){
 }
 
 train_eda$Dummy_Garage<-unlist(lapply(train_eda$GarageArea, dummy_garage))
-
-barplot(train_eda$Dummy_Garage)
 
 ggplot(train_eda, aes(x=as.factor(Dummy_Garage) )) + geom_bar()
 
@@ -137,25 +115,21 @@ paste(x$year[1], x$month[1], sep='')
 ggplot(x, aes(x=myDate, y=average_price)) + geom_point(color='steelblue')
 
 #########################Reading in FRED
-HPI<-read.csv('CSUSHPINSA.csv')[13:192,]
-head(HPI)
-ggplot(HPI, aes(x=DATE, y=CSUSHPINSA)) + geom_point(color='orange')
+HPI<-read.csv('NYXRSA.csv')[193:372,]
+
+ggplot(HPI, aes(x=DATE, y=NYXRSA)) + geom_point(color='orange')
 
 Merged_Price_HPI <- sqldf('
                           select 
                             HPI.DATE as Date,
-                            HPI.CSUSHPINSA as HPI,
+                            HPI.NYXRSA as HPI,
                             x.average_price as Avg_Price
                           from HPI inner join x on HPI.DATE=x.myDate')
 
 head(Merged_Price_HPI)
 
-ggplot(Merged_Price_HPI, aes(Date, y = value, color = variable)) + 
-  geom_point(aes(y = HPI, col = "HPI")) + 
-  geom_point(aes(y = Avg_Price, col = "Avg_Price"))
-
 normalize_HPI <- function(x) {
-  return ((x - 161.4047) / 18.12703)
+  return ((x - 180.7487) / 17.23574)
 }
 
 normalize_Price <- function(x) {
@@ -178,6 +152,27 @@ ggplot(Merged_Price_HPI, aes(Date, y = Standardized_Value, color = variable)) +
   geom_point(aes(y = HPI_n, col = "HPI")) + 
   geom_point(aes(y = Avg_Price_n, col = "Avg_Price")) +
   ggtitle('Average Price vs. HPI') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+colnames(train_eda)
+
+
+past_08 <-function(x){
+  if (x>2008){
+    return(1)
+  }
+  else{
+    return(0)
+  }
+}
+
+
+train_eda$past_08<-unlist(lapply(train_eda$year, past_08))
+
+
+ggplot(train_eda, aes(sale_date, y = Price)) + 
+  geom_point(aes(y = sale_price)) +
+  ggtitle('Price vs. Sale Date') +
   theme(plot.title = element_text(hjust = 0.5))
 
 
@@ -270,9 +265,104 @@ sum(disc)
 ###Gross_Sqft
 ###############################################################################################################
 
-
+ggplot(train_eda, aes(x=gross_sqft, y=sale_price)) + 
+  geom_point(color='steel blue') +
+  ggtitle('Sale Price vs. Gross Sqft') +
+  theme(plot.title = element_text(hjust = 0.5))
   
-  
+###############################################################################################################
+###Coordinates
+###############################################################################################################
+head(train_eda)
+train_eda <- subset(train_eda, train_eda$XCoord!=0)
+
+ggplot(train_eda, aes(x=XCoord, y=YCoord)) + 
+  geom_point(color='steel blue') +
+  ggtitle('Sale Price vs. Gross Sqft') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+###############################################################################################################
+###Landmark
+###############################################################################################################
+head(train_eda)
+
+is.na(train_eda$Landmark[1])
+
+has_landmark <- function(x){
+  if(is.na(x)){
+    return(0) 
+  }
+  else{
+    return(1)
+  }
+}
+
+
+train_eda$has_Landmark<-unlist(lapply(train_eda$Landmark, has_landmark))
+sum(train_eda$has_Landmark)
+
+###############################################################################################################
+###Merge HPI into Training DS
+###############################################################################################################
+head(HPI)
+HPI$month<-format(as.Date(HPI$DATE, format="%Y-%m-%d"), "%m")
+HPI$year<-format(as.Date(HPI$DATE, format="%Y-%m-%d"), "%Y")
+head(HPI)
+
+head(train_eda)
+
+train_w_hpi <- sqldf('
+                     select 
+                      a.*,
+                      b.NYXRSA as NY_HPI
+                     from train_eda a left join HPI b on a.month=b.month and a.year=b.year
+                     ')
+head(train_w_hpi)
+dim(train_w_hpi)
+dim(train_eda)
+
+train_w_hpi$current_HPI<-rep(read.csv('NYXRSA.csv')$NYXRSA[381],dim(train_w_hpi)[1])
+head(train_w_hpi)
+
+train_w_hpi$hpi_diff<-train_w_hpi$NY_HPI-train_w_hpi$current_HPI
+head(train_w_hpi)
+
+train_w_hpi$hpi_pct<-train_w_hpi$hpi_diff/train_w_hpi$current_HPI
+head(train_w_hpi)
+
+(max(HPI$NYXRSA)-min(HPI$NYXRSA))/min(HPI$NYXRSA)
+
+the_dundies<-read.csv('the_dundies.csv')
+
+test <- sqldf('
+              select 
+                a.*,
+                b.Price as Zillow_Price
+              from
+                train_w_hpi a left outer join the_dundies b on a.address=b.Address')
+
+head(test)
+test[is.na(test)] <- 0
+test$adjusted_zillow=test$Zillow_Price*(1+test$hpi_pct)
+
+compare_zillow<-function(i){
+  if (test$adjusted_zillow[i]==0){
+    print(i)
+    final_adjusted_price=c(final_adjusted_price,test$sale_price[i])
+  }
+  else if(test$sale_price[i]<(0.5*test$adjusted_zillow[i])){
+    final_adjusted_price = c(final_adjusted_price, test$adjusted_zillow[i])
+  }
+  else{
+    final_adjusted_price = c(final_adjusted_price, test$sale_price[i])
+  }
+}
+
+final_adjusted_price <- NULL
+for (i in seq(1:30)){
+  compare_zillow(i)
+}
 
 
 
@@ -281,6 +371,9 @@ sum(disc)
 
 
 
+
+
+write.csv(test,'clean_train_w_hpi')
 
 
 

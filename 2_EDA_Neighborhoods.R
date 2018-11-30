@@ -17,7 +17,7 @@ train<-subset(train,building_class_category=="01 ONE FAMILY HOMES" | building_cl
 
 #Price
 train<- subset(train, train$sale_price<5000000)
-train<- subset(train, train$sale_price<10000)
+train<- subset(train, train$sale_price>10000)
 
 #Sqft
 train<-subset(train, train$gross_sqft>0)
@@ -30,9 +30,7 @@ unique(train$neighborhood)
 train %>% select(neighborhood, sale_price) %>% ggplot(aes(factor(neighborhood), sale_price)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 90, hjust =1)) + xlab('Neighborhoods')
 
 
-
-
-
+plot(summary(train$neighborhood))
 
 
 
